@@ -20,6 +20,7 @@ load_dotenv(env_path)
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
+    research: str
 
 
 llm = ChatGroq(
@@ -64,12 +65,17 @@ llm_with_tools = llm.bind_tools(tools)
 
 def call_llm(state: State):
     print("\n--- LLM NODE ---")
-    print("Messages entering LLM:", len(state["messages"]))
 
     response = llm_with_tools.invoke(state["messages"])
 
+    if response.tool_calls:
+        return {
+            "messages": [response]
+        }
+
     return {
-        "messages": [response]
+        "messages": [response],
+        "research": response.content
     }
 
 
@@ -112,7 +118,7 @@ app = graph.compile()
 
 result = app.invoke({
     "messages": [
-        HumanMessage(content="What are the latest developments in AI agents?")
+        HumanMessage(content="Research the latest developments in AI agents and compare at least 3 major developments.")
     ]
 })
 
@@ -120,3 +126,6 @@ for message in result["messages"]:
     print("\n---")
     print(type(message).__name__)
     print(message)
+
+print("\n=== RESEARCH ===")
+print(result["research"])
