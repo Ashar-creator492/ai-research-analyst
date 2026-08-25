@@ -116,16 +116,20 @@ graph.add_edge("tools", "llm")
 
 app = graph.compile()
 
-result = app.invoke({
-    "messages": [
-        HumanMessage(content="Research the latest developments in AI agents and compare at least 3 major developments.")
-    ]
-})
 
-for message in result["messages"]:
-    print("\n---")
-    print(type(message).__name__)
-    print(message)
+def run_researcher(query: str):
+    result = app.invoke({
+        "messages": [
+            HumanMessage(content=query)
+        ]
+    })
 
-print("\n=== RESEARCH ===")
-print(result["research"])
+    return result["research"]
+
+if __name__ == "__main__":
+    research = run_researcher(
+        "Research the latest developments in AI agents and compare at least 3 major developments."
+    )
+
+    print("\n=== RESEARCH ===")
+    print(research)
