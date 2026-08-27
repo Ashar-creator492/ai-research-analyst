@@ -54,6 +54,12 @@ graph.add_edge("writer", END)
 
 app = graph.compile()
 
+def check_state(state: State):
+    print("\n--- STATE ---")
+    print("Topic:", state["topic"])
+    print("Research:", state["research"])
+    print("Analysis:", state["analysis"])
+    print("Final Answer:", state["final_answer"])
 
 def run_pipeline(topic: str):
     result = app.invoke({
