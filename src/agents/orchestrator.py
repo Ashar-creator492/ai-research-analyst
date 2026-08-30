@@ -1,11 +1,19 @@
 from typing import TypedDict
 
+
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 
 from src.agents.researcher import run_researcher
 from src.agents.analyst import run_analyst
 from src.agents.writer import run_writer
+
+from dataclasses import dataclass
+from langgraph.store.memory import InMemoryStore
+from langgraph.runtime import Runtime
+import uuid
+
+from src.memory import extract_memory, get_relevant_memories
 
 
 class State(TypedDict):
@@ -15,8 +23,44 @@ class State(TypedDict):
     final_answer: str
 
 
-def researcher_node(state: State):
-    research = run_researcher(state["topic"])
+
+@dataclass
+class UserContext:
+    user_id: str
+
+
+def researcher_node(
+    state: State,
+    runtime: Runtime[UserContext]
+):
+    user_id = runtime.context.user_id
+
+    namespace = (
+        "user_memories",
+        user_id
+    )
+
+    memories = runtime.store.search(namespace)
+
+    relevant_memories = get_relevant_memories(
+        state["topic"],
+        memories
+    )
+
+    memory_text = "\n".join(
+        memory.value["memory"]
+        for memory in relevant_memories
+    )
+
+    print("\n=== RELEVANT MEMORIES ===")
+
+    for memory in relevant_memories:
+        print(memory.value["memory"][:300])
+
+    research = run_researcher(
+        state["topic"],
+        memory_text
+    )
 
     return {
         "research": research
@@ -41,22 +85,60 @@ def writer_node(state: State):
     }
 
 
-graph = StateGraph(State)
+def memory_node(
+    state: State,
+    runtime: Runtime[UserContext]
+):
+    memory = extract_memory(
+        state["topic"],
+        state["final_answer"]
+    )
+
+    if memory != "NONE":
+        user_id = runtime.context.user_id
+
+        namespace = (
+            "user_memories",
+            user_id
+        )
+
+        runtime.store.put(
+            namespace,
+            str(uuid.uuid4()),
+            {
+                "memory": memory
+            }
+        )
+
+    return {}
+
+
+
+graph = StateGraph(
+    State,
+    context_schema=UserContext
+)
 
 graph.add_node("researcher", researcher_node)
 graph.add_node("analyst", analyst_node)
 graph.add_node("writer", writer_node)
+graph.add_node("memory", memory_node)
 
 graph.add_edge(START, "researcher")
 graph.add_edge("researcher", "analyst")
 graph.add_edge("analyst", "writer")
-graph.add_edge("writer", END)
-
+graph.add_edge("writer", "memory")
+graph.add_edge("memory", END)
 
 checkpointer = InMemorySaver()
 
+long_term_store = InMemoryStore()
+
+
+
 app = graph.compile(
-    checkpointer=checkpointer
+    checkpointer=checkpointer,
+    store=long_term_store
 )
 
 def check_state(state: State):
@@ -66,7 +148,7 @@ def check_state(state: State):
     print("Analysis:", state["analysis"])
     print("Final Answer:", state["final_answer"])
 
-def run_pipeline(topic: str, thread_id: str):
+def run_pipeline(topic: str, thread_id: str, user_id: str):
     result = app.invoke(
         {
             "topic": topic,
@@ -78,7 +160,10 @@ def run_pipeline(topic: str, thread_id: str):
             "configurable": {
                 "thread_id": thread_id
             }
-        }
+        },
+        context=UserContext(
+            user_id=user_id
+        )
     )
 
     return result["final_answer"]
@@ -120,6 +205,19 @@ def inspect_history(thread_id: str):
         print("Analysis:", snapshot.values.get("analysis", "")[:100])
         print("Final Answer:", snapshot.values.get("final_answer", "")[:100])
 
+def inspect_long_term_memory(user_id: str):
+    namespace = (
+        "user_memories",
+        user_id
+    )
+
+    memories = long_term_store.search(namespace)
+
+    print("\n=== LONG-TERM MEMORIES ===")
+
+    for memory in memories:
+        print(memory.value)
+
 
 if __name__ == "__main__":
     thread_id = "test-thread"
@@ -129,8 +227,9 @@ if __name__ == "__main__":
     print("\n========== RUN 1 ==========")
 
     run_pipeline(
-        topic_1,
-        thread_id
+    topic_1,
+    thread_id,
+    "ashar"
     )
 
     topic_2 = "Research the latest developments in MCP."
@@ -138,10 +237,12 @@ if __name__ == "__main__":
     print("\n========== RUN 2 ==========")
 
     run_pipeline(
-        topic_2,
-        thread_id
+    topic_2,
+    thread_id,
+    "ashar"
     )
 
     inspect_thread(thread_id)
 
     inspect_history(thread_id)
+    inspect_long_term_memory("ashar")

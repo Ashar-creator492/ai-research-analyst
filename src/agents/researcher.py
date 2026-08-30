@@ -117,14 +117,31 @@ graph.add_edge("tools", "llm")
 app = graph.compile()
 
 
-def run_researcher(query: str):
+def run_researcher(query: str, memory_text: str = ""):
+
+    prompt = f"""
+You are a research agent.
+
+Previous useful research memory:
+{memory_text}
+
+Current research request:
+{query}
+
+Use the previous memory if it is relevant.
+Do not blindly trust it. Search the web for current information.
+"""
+
     result = app.invoke({
         "messages": [
-            HumanMessage(content=query)
+            HumanMessage(content=prompt)
         ]
     })
 
     return result["research"]
+
+
+
 
 if __name__ == "__main__":
     research = run_researcher(

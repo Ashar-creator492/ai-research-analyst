@@ -5,14 +5,17 @@ from src.agents.orchestrator import run_pipeline
 
 
 
-if "thread_id" not in st.session_state:
-    st.session_state.thread_id = str(uuid.uuid4())
 
 st.set_page_config(
     page_title="AI Research Analyst",
     page_icon="🔎",
     layout="wide"
 )
+
+
+
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
 
 st.title("🔎 AI Research Analyst")
 st.write("Enter a topic and let the AI research, analyze, and write the final answer.")
@@ -30,7 +33,8 @@ if st.button("Run Research", type="primary"):
             try:
                 final_answer = run_pipeline(
                 topic,
-                st.session_state.thread_id
+                st.session_state.thread_id,
+                "ashar"
             )
 
                 st.subheader("Final Answer")
