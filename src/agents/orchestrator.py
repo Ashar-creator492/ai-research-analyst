@@ -1,15 +1,16 @@
 from typing import TypedDict
 
+import sqlite3
 
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from src.agents.researcher import run_researcher
 from src.agents.analyst import run_analyst
 from src.agents.writer import run_writer
 
 from dataclasses import dataclass
-from langgraph.store.memory import InMemoryStore
+from langgraph.store.sqlite import SqliteStore
 from langgraph.runtime import Runtime
 import uuid
 
@@ -130,9 +131,24 @@ graph.add_edge("analyst", "writer")
 graph.add_edge("writer", "memory")
 graph.add_edge("memory", END)
 
-checkpointer = InMemorySaver()
 
-long_term_store = InMemoryStore()
+
+checkpoint_conn = sqlite3.connect(
+    "checkpoints.db",
+    check_same_thread=False,
+    isolation_level=None
+)
+
+checkpointer = SqliteSaver(checkpoint_conn)
+
+
+memory_conn = sqlite3.connect(
+    "long_term_memory.db",
+    check_same_thread=False,
+    isolation_level=None
+)
+
+long_term_store = SqliteStore(memory_conn)
 
 
 
@@ -219,30 +235,33 @@ def inspect_long_term_memory(user_id: str):
         print(memory.value)
 
 
+# if __name__ == "__main__":
+#     thread_id = "test-thread"
+
+#     topic_1 = "Research the latest developments in AI agents."
+
+#     print("\n========== RUN 1 ==========")
+
+#     run_pipeline(
+#     topic_1,
+#     thread_id,
+#     "ashar"
+#     )
+
+#     topic_2 = "Research the latest developments in MCP."
+
+#     print("\n========== RUN 2 ==========")
+
+#     run_pipeline(
+#     topic_2,
+#     thread_id,
+#     "ashar"
+#     )
+
+#     inspect_thread(thread_id)
+
+#     inspect_history(thread_id)
+#     inspect_long_term_memory("ashar")
+
 if __name__ == "__main__":
-    thread_id = "test-thread"
-
-    topic_1 = "Research the latest developments in AI agents."
-
-    print("\n========== RUN 1 ==========")
-
-    run_pipeline(
-    topic_1,
-    thread_id,
-    "ashar"
-    )
-
-    topic_2 = "Research the latest developments in MCP."
-
-    print("\n========== RUN 2 ==========")
-
-    run_pipeline(
-    topic_2,
-    thread_id,
-    "ashar"
-    )
-
-    inspect_thread(thread_id)
-
-    inspect_history(thread_id)
     inspect_long_term_memory("ashar")
