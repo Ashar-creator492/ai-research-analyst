@@ -3,7 +3,7 @@ from typing import TypedDict
 import sqlite3
 
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from src.agents.researcher import run_researcher
 from src.agents.analyst import run_analyst
@@ -30,7 +30,7 @@ class UserContext:
     user_id: str
 
 
-def researcher_node(
+async def researcher_node(
     state: State,
     runtime: Runtime[UserContext]
 ):
@@ -58,10 +58,10 @@ def researcher_node(
     for memory in relevant_memories:
         print(memory.value["memory"][:300])
 
-    research = run_researcher(
-        state["topic"],
-        memory_text
-    )
+    research = await run_researcher(
+    state["topic"],
+    memory_text
+)
 
     return {
         "research": research
@@ -133,13 +133,6 @@ graph.add_edge("memory", END)
 
 
 
-checkpoint_conn = sqlite3.connect(
-    "checkpoints.db",
-    check_same_thread=False,
-    isolation_level=None
-)
-
-checkpointer = SqliteSaver(checkpoint_conn)
 
 
 memory_conn = sqlite3.connect(
@@ -152,10 +145,7 @@ long_term_store = SqliteStore(memory_conn)
 
 
 
-app = graph.compile(
-    checkpointer=checkpointer,
-    store=long_term_store
-)
+
 
 def check_state(state: State):
     print("\n--- STATE ---")
@@ -164,25 +154,35 @@ def check_state(state: State):
     print("Analysis:", state["analysis"])
     print("Final Answer:", state["final_answer"])
 
-def run_pipeline(topic: str, thread_id: str, user_id: str):
-    result = app.invoke(
-        {
-            "topic": topic,
-            "research": "",
-            "analysis": "",
-            "final_answer": ""
-        },
-        {
-            "configurable": {
-                "thread_id": thread_id
-            }
-        },
-        context=UserContext(
-            user_id=user_id
-        )
-    )
+async def run_pipeline(topic: str, thread_id: str, user_id: str):
 
-    return result["final_answer"]
+    async with AsyncSqliteSaver.from_conn_string(
+        "checkpoints.db"
+    ) as checkpointer:
+
+        app = graph.compile(
+            checkpointer=checkpointer,
+            store=long_term_store
+        )
+
+        result = await app.ainvoke(
+            {
+                "topic": topic,
+                "research": "",
+                "analysis": "",
+                "final_answer": ""
+            },
+            {
+                "configurable": {
+                    "thread_id": thread_id
+                }
+            },
+            context=UserContext(
+                user_id=user_id
+            )
+        )
+
+        return result["final_answer"]
 
 
 def inspect_thread(thread_id: str):
@@ -264,4 +264,15 @@ def inspect_long_term_memory(user_id: str):
 #     inspect_long_term_memory("ashar")
 
 if __name__ == "__main__":
-    inspect_long_term_memory("ashar")
+    import asyncio
+
+    result = asyncio.run(
+        run_pipeline(
+            "Research the latest developments in AI agents.",
+            "test-thread",
+            "ashar"
+        )
+    )
+
+    print("\n=== FINAL ANSWER ===")
+    print(result)

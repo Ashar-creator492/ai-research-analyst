@@ -4,6 +4,8 @@ from datetime import datetime
 
 import streamlit as st
 
+import asyncio
+
 from src.agents.orchestrator import run_pipeline
 
 
@@ -558,11 +560,13 @@ if run_clicked:
 
         try:
             with st.spinner("Running the research pipeline"):
-                final_answer = run_pipeline(
-                    topic,
-                    st.session_state.thread_id,
-                    user_id
-                )
+                final_answer = asyncio.run(
+                    run_pipeline(
+                        topic,
+                        st.session_state.thread_id,
+                        user_id
+                    )
+)
 
             stage_placeholder.markdown(render_pipeline_status("done"), unsafe_allow_html=True)
 
